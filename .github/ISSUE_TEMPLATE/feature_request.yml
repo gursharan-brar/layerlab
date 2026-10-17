@@ -1,0 +1,44 @@
+name: Feature request
+description: Suggest a new capability or improvement
+labels: ["enhancement", "triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the editing or workflow need, not only the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Area
+      options:
+        - Dialogue
+        - Music
+        - Sound effects
+        - On-screen graphics
+        - Edit timeline
+        - Job folder and manifest
+        - CLI
+        - Packaging or CI
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: local
+    attributes:
+      label: Constraints
+      options:
+        - label: This keeps processing local (no uploads to remote services by default)
+          required: true

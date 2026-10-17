@@ -1,0 +1,63 @@
+name: Model request
+description: Request support for a model or model backend in a layer
+labels: ["model-request", "triage"]
+body:
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Layer
+      options:
+        - Dialogue (speech recognition, diarization)
+        - Music (source separation, detection)
+        - Sound effects (classification, event detection)
+        - On-screen graphics (text or logo detection, segmentation)
+        - Edit timeline (scene or cut detection)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Model name and link
+      description: Link to the model card or paper.
+    validations:
+      required: true
+  - type: input
+    id: license
+    attributes:
+      label: Model license
+      description: Weights and code may be licensed separately. Please check both.
+      placeholder: "e.g. MIT, Apache-2.0, CC-BY-NC-4.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: format
+    attributes:
+      label: Weight format
+      options:
+        - safetensors
+        - ONNX
+        - GGUF
+        - PyTorch pickle (.pt / .pth / .bin)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware requirements
+      description: VRAM, RAM, and whether it runs on CPU, CUDA, or Apple Silicon.
+  - type: textarea
+    id: why
+    attributes:
+      label: Why this model?
+      description: What quality, speed, or licensing advantage does it offer over what exists?
+    validations:
+      required: true
+  - type: checkboxes
+    id: local
+    attributes:
+      label: Runtime
+      options:
+        - label: The model runs fully locally once its weights are downloaded
+          required: true
