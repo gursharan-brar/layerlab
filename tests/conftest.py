@@ -35,6 +35,33 @@ _CACHE_ENV = "LAYERLAB_CACHE_DIR"
 _USER_CACHE = os.environ.get(_CACHE_ENV)
 
 
+def _real_text_detector_loader() -> Any:
+    from layerlab.steps import analyze
+
+    return analyze.load_text_detector
+
+
+_REAL_LOAD_TEXT_DETECTOR = _real_text_detector_loader()
+
+
+class ScriptedTextDetector:
+    """Fake text detector: returns preset boxes for each call, in call order (sample index)."""
+
+    name = "scripted"
+
+    def __init__(self, script: dict[int, list[Any]]) -> None:
+        self.script = script
+        self.calls = 0
+
+    def detect(self, frame: Any) -> list[Any]:
+        boxes = self.script.get(self.calls, [])
+        self.calls += 1
+        return list(boxes)
+
+    def describe(self) -> dict[str, Any]:
+        return {"model": "scripted"}
+
+
 def _fake_tiger(_device: str, _status: Any) -> Any:
     from synthetic_audio import BandSplitSeparator
 
@@ -60,9 +87,11 @@ def _hermetic_models(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]
     that need no weights. Tests marked `real_models` opt out (see below).
     """
     from layerlab.backends import catalog
+    from layerlab.steps import analyze
 
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv(_CACHE_ENV, str(tmp_path_factory.mktemp("model-cache")))
+        patch.setattr(analyze, "load_text_detector", lambda *_args: ScriptedTextDetector({}))
         patch.setitem(
             catalog.BACKENDS, "tiger", catalog.BackendInfo("tiger", (), _fake_tiger, {"fake": 1})
         )
@@ -93,6 +122,9 @@ def _real_models_opt_in(request: pytest.FixtureRequest, monkeypatch: pytest.Monk
     }
     for name, info in real.items():
         monkeypatch.setitem(catalog.BACKENDS, name, info)
+    from layerlab.steps import analyze
+
+    monkeypatch.setattr(analyze, "load_text_detector", _REAL_LOAD_TEXT_DETECTOR)
     if _USER_CACHE:
         monkeypatch.setenv(_CACHE_ENV, _USER_CACHE)
     else:
@@ -181,3 +213,11 @@ def ffprobe_streams(path: Path) -> list[dict[str, Any]]:
     )
     streams: list[dict[str, Any]] = json.loads(result.stdout)["streams"]
     return streams
+
+
+@pytest.fixture(scope="session")
+def overlay_video(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Known cuts, caption and logo: see tests/synthetic_video.py."""
+    from synthetic_video import make_overlay_video
+
+    return make_overlay_video(_require_ffmpeg(), tmp_path_factory.mktemp("media") / "overlay.mp4")

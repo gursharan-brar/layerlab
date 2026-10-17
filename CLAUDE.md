@@ -16,7 +16,7 @@ Everything runs locally. Do not add code that uploads media or calls a remote in
 
 ## Current state
 
-Pre-alpha. The pipeline core exists: `layerlab run`, the job folder, the manifest, resumable steps, the `extract` step and the `audio` step. The `analyze`, `inpaint` and `export` steps are **placeholders**: they declare their inputs and record `"placeholder": true` but do no processing yet.
+Pre-alpha. The pipeline core exists: `layerlab run`, the job folder, the manifest, resumable steps, and the `extract`, `audio` and `analyze` steps. The `inpaint` and `export` steps are **placeholders**: they declare their inputs and record `"placeholder": true` but do no processing yet.
 
 ## Architecture
 
@@ -38,6 +38,7 @@ Steps never call each other directly. The pipeline runner decides the order by r
   steps/
     extract/             # audio.wav (48 kHz stereo PCM), video_only.mp4 (stream copy)
     audio/               # dialogue.wav, music.wav, effects.wav (32-bit float), sfx_events.json
+    analyze/             # shots.json, overlays.json, masks/<track>/<sample>.png, [debug_preview.mp4]
     <step>/              # one folder per step, written only by that step
     <step>.tmp/          # exists only while that step runs
 ```
@@ -107,6 +108,19 @@ When adding a backend:
 
 `src/layerlab/devices.py` picks `cuda`, `rocm`, `mps` or `cpu`, in that order of preference. If PyTorch is installed, its view wins (a CPU-only PyTorch build means `cpu` even on a GPU machine). Otherwise it looks for `nvidia-smi`, ROCm tools or `/dev/kfd`, and Apple Silicon. `layerlab run --device <name>` overrides detection; an override that was not detected is still used but flagged in `detail`. The choice is printed and stored in the manifest's `device`. The device is not part of a step's input hash, so changing it does not invalidate cached outputs.
 
+### Analyze step and detectors
+
+`src/layerlab/steps/analyze.py` only reads `extract`'s `video_only.mp4`. It checks the file's size and mtime are unchanged afterwards and records `video_unchanged`. Each detector is its own module under `src/layerlab/analyze/`, with its own section of thresholds in `analyze/defaults.toml`. `--analyze-config my.toml` overrides any subset (unknown keys are rejected, and the CLI validates the file before any step runs). The resolved settings go into the step's input hash.
+
+- `cuts.py`: PySceneDetect `ContentDetector` (`[cuts]`). Writes `shots.json` with `start`, `end` (exclusive), `duration` and frame numbers, plus the list of cut times. Handles both PySceneDetect 0.6 and 0.7 timecode APIs.
+- `frames.py`: frames streamed from an ffmpeg pipe, all frames or sampled at `[sampling] fps` (sample k is the frame nearest k / fps s), scaled to at most `max_side`.
+- Text: `backends/text_detection.py` runs PaddleOCR's PP-OCRv3 DB detector (`paddleocr-det-v3`, ONNX, onnxruntime; detection only, no recognition, no PaddlePaddle) behind the `TextDetector` protocol. `text_overlays.py` groups per-sample boxes into tracks by IoU with gap bridging and drops tracks shorter than `min_samples` (`[text]`).
+- `logos.py`: per-pixel stability over the samples at `analysis_width`. It keeps a histogram of quantised luma plus running mean and variance. A pixel is static if it is within one level of its mode in at least `stable_fraction` (0.8) of samples. Static regions are filtered by area, edge density and span (bars are not logos). A second pass finds the samples each logo is present in (`[logos]`).
+- `overlays.py`: tracks, mask PNG sequences and `overlays.json`. Masks are 8-bit single-channel PNGs at video resolution, one per sample a track covers, at `masks/<track id>/<sample:06d>.png`. Each track lists its masks with their times.
+- `preview.py`: `--debug-preview` decodes every frame, draws track boxes (text green, logo orange), cut markers and the shot counter, and encodes `debug_preview.mp4` (mpeg4, so it works with any ffmpeg build).
+
+The text detector is loaded through `analyze.load_text_detector`, which tests replace with a scripted fake.
+
 ### Media tools
 
 ffmpeg and ffprobe are the only required external tools. Call them through `src/layerlab/ffmpeg.py` (`probe`, `run`), which takes argument lists, never shell strings, and raises `FFmpegError` with a clear message when a tool is missing or fails.
@@ -128,12 +142,14 @@ src/layerlab/
   ffmpeg.py       # ffprobe/ffmpeg wrappers
   steps/          # extract, audio (real); analyze, inpaint, export (placeholders)
   audio/          # dsp (STFT, resampling), chunking (crossfaded streaming), sfx (onsets)
-  backends/       # separation protocol, catalog, tiger_dnr, htdemucs
+  backends/       # separation protocol, catalog, tiger_dnr, htdemucs, text_detection
+  analyze/        # defaults.toml, config, frames, cuts, text_overlays, logos, overlays, preview
   devices.py      # compute device detection and selection
   models/         # registry.toml, registry loader, resumable verified downloads, cache
 tests/
   conftest.py         # synthetic_video / silent_video fixtures; fake backends for every test
   synthetic_audio.py  # mixes with known stems, BandSplitSeparator, IdentitySeparator
+  synthetic_video.py  # video with known cuts (2 s, 4 s), a caption (1-4.5 s) and a corner logo
 ```
 
 ## Tests and media
@@ -165,6 +181,7 @@ layerlab run input.mp4 --out ./output [--skip <step>] [--force] [--device auto|c
 layerlab models list
 layerlab models fetch <name>...
 layerlab run input.mp4 --audio-backend demucs        # needs pip install -e ".[demucs]"
+layerlab run input.mp4 --debug-preview --analyze-config my.toml
 LAYERLAB_REAL_MODEL_TESTS=1 pytest -m real_models    # runs the real models
 pre-commit install
 ```

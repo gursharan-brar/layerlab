@@ -16,6 +16,7 @@ from rich.progress import (
 from rich.table import Table
 
 from layerlab import __version__
+from layerlab.analyze.config import load_config as load_analyze_config
 from layerlab.backends.catalog import BACKEND_NAMES, DEFAULT_BACKEND
 from layerlab.devices import DEVICE_CHOICES
 from layerlab.doctor import run_checks
@@ -24,6 +25,8 @@ from layerlab.models import cache_dir, ensure_model, is_cached, load_registry, m
 from layerlab.models.download import DownloadProgress
 from layerlab.pipeline import StepFailed, run_pipeline
 from layerlab.steps import STEP_NAMES
+from layerlab.steps.analyze import CONFIG_OPTION as ANALYZE_CONFIG_OPTION
+from layerlab.steps.analyze import PREVIEW_OPTION as DEBUG_PREVIEW_OPTION
 from layerlab.steps.audio import OPTION as AUDIO_BACKEND_OPTION
 
 app = typer.Typer(
@@ -108,6 +111,18 @@ def run(
     ),
     device: str = typer.Option("auto", "--device", help=_DEVICE_HELP),
     audio_backend: str = typer.Option(DEFAULT_BACKEND, "--audio-backend", help=_AUDIO_BACKEND_HELP),
+    analyze_config: Path | None = typer.Option(
+        None,
+        "--analyze-config",
+        exists=True,
+        dir_okay=False,
+        help="TOML file overriding the analyze step's detector thresholds.",
+    ),
+    debug_preview: bool = typer.Option(
+        False,
+        "--debug-preview",
+        help="Also render analyze/debug_preview.mp4 with detected boxes and cuts drawn on.",
+    ),
 ) -> None:
     """Run the pipeline on INPUT. Re-running resumes, skipping steps whose inputs are unchanged."""
     unknown = sorted(set(skip) - set(STEP_NAMES))
@@ -126,6 +141,15 @@ def run(
             f"unknown audio backend '{audio_backend}'. Choose from: {', '.join(BACKEND_NAMES)}.",
             param_hint="--audio-backend",
         )
+    options = {AUDIO_BACKEND_OPTION: audio_backend}
+    if analyze_config is not None:
+        try:
+            load_analyze_config(analyze_config)  # fail now, not after earlier steps have run
+        except LayerlabError as exc:
+            raise typer.BadParameter(str(exc), param_hint="--analyze-config") from exc
+        options[ANALYZE_CONFIG_OPTION] = str(analyze_config.resolve())
+    if debug_preview:
+        options[DEBUG_PREVIEW_OPTION] = "1"
     # soft_wrap keeps long paths on one line so they stay copyable.
     console = Console(soft_wrap=True)
     try:
@@ -135,7 +159,7 @@ def run(
             skip=skip,
             force=force,
             device=device,
-            options={AUDIO_BACKEND_OPTION: audio_backend},
+            options=options,
             console=console,
         )
     except StepFailed as exc:

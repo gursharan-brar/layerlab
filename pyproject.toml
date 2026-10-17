@@ -31,8 +31,10 @@ dependencies = [
     "librosa>=0.10",
     "numpy>=1.24",
     "onnxruntime>=1.17",
+    "opencv-python-headless>=4.8",
     "platformdirs>=4.0",
     "rich>=13.7",
+    "scenedetect>=0.6.4",
     "scipy>=1.10",
     "soundfile>=0.12",
     "tomli>=2.0; python_version < '3.11'",
@@ -94,7 +96,7 @@ warn_unreachable = true
 
 [[tool.mypy.overrides]]
 # Third-party packages without type information.
-module = ["soundfile", "onnxruntime", "scipy.*", "librosa", "librosa.*"]
+module = ["soundfile", "onnxruntime", "scipy.*", "librosa", "librosa.*", "cv2", "scenedetect"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

@@ -1,0 +1,68 @@
+# Default thresholds for the analyze step.
+#
+# Override any of them with `layerlab run ... --analyze-config my.toml`, where
+# my.toml contains only the keys you want to change, for example:
+#
+#   [cuts]
+#   threshold = 32.0
+#
+# The resolved settings are part of the analyze step's input hash, so changing
+# them re-runs the step.
+
+[sampling]
+# Frames per second sampled for text and logo detection.
+fps = 2.0
+# Longest side, in pixels, of the frames given to the text detector.
+max_side = 960
+
+[cuts]
+# PySceneDetect ContentDetector: weighted HSV change between frames that counts as a cut.
+threshold = 27.0
+# Shortest shot, in seconds. Cuts closer together than this are merged.
+min_shot_seconds = 0.5
+# Compare luma only instead of hue, saturation and luma.
+luma_only = false
+
+[text]
+# PaddleOCR DB detector (see layerlab/backends/text_detection.py).
+limit_side_len = 960
+pixel_threshold = 0.3
+box_threshold = 0.6
+unclip_ratio = 1.5
+# Boxes shorter than this, in video pixels, are ignored.
+min_box_height = 10
+# Grouping into tracks: a box joins a track if it overlaps the track's last box by this IoU.
+iou_threshold = 0.5
+# A track may miss this many consecutive samples and continue.
+max_gap_samples = 1
+# Tracks seen in fewer samples than this are dropped (2 samples at 2 fps = 1 s).
+min_samples = 2
+# Pixels added around each box in the masks.
+mask_padding = 4
+
+[logos]
+# Width, in pixels, of the luma frames used for the stability analysis.
+analysis_width = 320
+# Luma is quantised into this many levels; "near-constant" means within one level of the mode.
+levels = 32
+# A pixel is static if it is near-constant in at least this fraction of samples.
+stable_fraction = 0.8
+# Logos need at least this many samples to be detected.
+min_samples = 4
+# Static regions outside this size range, as a fraction of the frame, are ignored.
+min_area_fraction = 0.0005
+max_area_fraction = 0.05
+# Static regions with fewer edge pixels than this fraction are flat (black, plain colour) and ignored.
+min_edge_density = 0.05
+# Regions this wide or tall, as a fraction of the frame, are bars or borders, not logos.
+max_span_fraction = 0.9
+# In a given sample the logo counts as present if this fraction of its pixels match its usual value.
+presence_fraction = 0.6
+# Pixels added around each region in the masks.
+mask_padding = 4
+
+[preview]
+# Longest side, in pixels, of the --debug-preview video.
+max_side = 960
+# How long the cut marker stays on screen after each cut, in seconds.
+cut_marker_seconds = 0.5

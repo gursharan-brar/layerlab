@@ -10,8 +10,8 @@
 
 Everything runs locally on your machine. Your footage is not uploaded anywhere.
 
-> **Status: pre-alpha.** The pipeline core, the `extract` step and the `audio`
-> step work. The analysis, inpainting and export steps are placeholders.
+> **Status: pre-alpha.** The pipeline core and the `extract`, `audio` and
+> `analyze` steps work. The inpainting and export steps are placeholders.
 
 ## Requirements
 
@@ -50,6 +50,15 @@ The `audio` step splits that audio into `dialogue.wav`, `music.wav` and `effects
 - `--audio-backend demucs`: Demucs htdemucs_ft. Install it with `pip install "layerlab[demucs]"` (this pulls in PyTorch). It produces dialogue (vocals) and music only. Effects stay mixed into music and are marked unavailable.
 
 Long audio is processed in overlapping, crossfaded chunks, so memory use does not grow with the length of the video.
+
+The `analyze` step reads the video (it never changes it) and writes:
+
+- `shots.json`: cuts found by PySceneDetect, with each shot's start, end and duration.
+- `overlays.json`: on-screen text (PaddleOCR text detection on frames sampled at 2 fps, grouped into tracks that persist in one region) and static logos (regions whose pixels stay nearly constant in 80% or more of the samples). Each track has a start, end and bounding box.
+- `masks/<track>/`: a PNG mask per sampled frame for every track, ready for inpainting.
+- `debug_preview.mp4`, with `--debug-preview`: the video with every detected box and cut drawn on.
+
+Every detector threshold lives in [`src/layerlab/analyze/defaults.toml`](src/layerlab/analyze/defaults.toml). Override any of them with `--analyze-config my.toml`.
 
 `--device` picks the compute device (`auto`, `cuda`, `rocm`, `mps` or `cpu`). By default layerlab uses the best one it finds, and records the choice in the manifest.
 
