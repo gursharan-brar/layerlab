@@ -10,8 +10,8 @@
 
 Everything runs locally on your machine. Your footage is not uploaded anywhere.
 
-> **Status: pre-alpha.** The package skeleton, CLI and environment checks exist.
-> No processing is implemented yet.
+> **Status: pre-alpha.** The pipeline core and the `extract` step work. The
+> separation, analysis, inpainting and export steps are placeholders.
 
 ## Requirements
 
@@ -30,11 +30,19 @@ python -m pip install -e ".[dev]"
 ## Usage
 
 ```bash
-layerlab --version
 layerlab doctor
+layerlab run input.mp4 --out ./output
 ```
 
 `layerlab doctor` checks the Python version, whether ffmpeg is on `PATH`, and whether a GPU is available.
+
+`layerlab run` creates a job folder under `--out`, named from the input file's hash, and runs the steps `extract`, `audio`, `analyze`, `inpaint` and `export` in order. Each step's results are recorded in the job's `manifest.json`.
+
+- Running again resumes: steps whose inputs have not changed are skipped.
+- `--skip <step>` skips a step (repeatable). `--force` re-runs everything.
+- If a step fails, the error is recorded in the manifest, earlier outputs are kept, and the command exits non-zero.
+
+The `extract` step writes `audio.wav` (48 kHz stereo) and `video_only.mp4` (the video stream, copied without re-encoding), and records fps, resolution and duration.
 
 ## Development
 

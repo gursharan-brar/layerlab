@@ -28,6 +28,7 @@ classifiers = [
     "Topic :: Multimedia :: Sound/Audio",
 ]
 dependencies = [
+    "rich>=13.7",
     "typer>=0.12",
 ]
 
