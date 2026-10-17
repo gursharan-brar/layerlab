@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,75 @@ _FONT_CANDIDATES = {
         "/usr/share/fonts/dejavu/DejaVuSans.ttf",
     ],
 }
+
+
+REAL_MODELS_ENV = "LAYERLAB_REAL_MODEL_TESTS"
+_CACHE_ENV = "LAYERLAB_CACHE_DIR"
+_USER_CACHE = os.environ.get(_CACHE_ENV)
+
+
+def _fake_tiger(_device: str, _status: Any) -> Any:
+    from synthetic_audio import BandSplitSeparator
+
+    return BandSplitSeparator(name="fake-tiger")
+
+
+def _fake_demucs(_device: str, _status: Any) -> Any:
+    from synthetic_audio import BandSplitSeparator
+
+    return BandSplitSeparator(
+        name="fake-demucs",
+        stems=("dialogue", "music"),
+        unavailable={"effects": "fake backend has no effects stem"},
+    )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _hermetic_models(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
+    """Keep every test, and every fixture of any scope, off real models.
+
+    Session-scoped so it is in place before module-scoped fixtures run the
+    pipeline. Tests get an empty temp model cache and fake separation backends
+    that need no weights. Tests marked `real_models` opt out (see below).
+    """
+    from layerlab.backends import catalog
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv(_CACHE_ENV, str(tmp_path_factory.mktemp("model-cache")))
+        patch.setitem(
+            catalog.BACKENDS, "tiger", catalog.BackendInfo("tiger", (), _fake_tiger, {"fake": 1})
+        )
+        patch.setitem(
+            catalog.BACKENDS,
+            "demucs",
+            catalog.BackendInfo("demucs", (), _fake_demucs, {"fake": 1}),
+        )
+        yield
+
+
+@pytest.fixture(autouse=True)
+def _real_models_opt_in(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`real_models` tests use real backends and cache; they need LAYERLAB_REAL_MODEL_TESTS=1."""
+    if request.node.get_closest_marker("real_models") is None:
+        return
+    if not os.environ.get(REAL_MODELS_ENV):
+        pytest.skip(f"set {REAL_MODELS_ENV}=1 to run tests that download and run real models")
+    from layerlab.backends import catalog, htdemucs, tiger_dnr
+
+    real = {
+        "tiger": catalog.BackendInfo(
+            "tiger", tiger_dnr.MODELS, tiger_dnr.TigerDnR.load, tiger_dnr.SETTINGS
+        ),
+        "demucs": catalog.BackendInfo(
+            "demucs", htdemucs.MODELS, htdemucs.HTDemucsFT.load, htdemucs.SETTINGS
+        ),
+    }
+    for name, info in real.items():
+        monkeypatch.setitem(catalog.BACKENDS, name, info)
+    if _USER_CACHE:
+        monkeypatch.setenv(_CACHE_ENV, _USER_CACHE)
+    else:
+        monkeypatch.delenv(_CACHE_ENV, raising=False)
 
 
 def _require_ffmpeg() -> str:

@@ -13,9 +13,14 @@ JOB_ID_LENGTH = 16
 STEPS_DIR = "steps"
 
 ProgressCallback = Callable[[float], None]
+StatusCallback = Callable[[str], None]
 
 
 def _ignore_progress(_fraction: float) -> None:
+    pass
+
+
+def _ignore_status(_text: str) -> None:
     pass
 
 
@@ -33,8 +38,10 @@ class Job:
         self.root = root
         self.source_path = source_path
         self.manifest = manifest
+        self.options: dict[str, str] = {}
         self._work_dir: Path | None = None
         self._progress: ProgressCallback = _ignore_progress
+        self._status: StatusCallback = _ignore_status
         self._hash_cache: dict[tuple[str, int, int], str] = {}
 
     @classmethod
@@ -113,13 +120,24 @@ class Job:
         """Called by steps to report progress as a 0..1 fraction."""
         self._progress(min(max(fraction, 0.0), 1.0))
 
-    def begin_step(self, work_dir: Path, on_progress: ProgressCallback) -> None:
+    def report_status(self, text: str) -> None:
+        """Called by steps to show what they are doing, for example 'downloading model'."""
+        self._status(text)
+
+    def begin_step(
+        self,
+        work_dir: Path,
+        on_progress: ProgressCallback,
+        on_status: StatusCallback | None = None,
+    ) -> None:
         self._work_dir = work_dir
         self._progress = on_progress
+        self._status = on_status or _ignore_status
 
     def end_step(self) -> None:
         self._work_dir = None
         self._progress = _ignore_progress
+        self._status = _ignore_status
 
     @staticmethod
     def _cache_key(path: Path) -> tuple[str, int, int]:

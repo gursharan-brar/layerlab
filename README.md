@@ -10,8 +10,8 @@
 
 Everything runs locally on your machine. Your footage is not uploaded anywhere.
 
-> **Status: pre-alpha.** The pipeline core and the `extract` step work. The
-> separation, analysis, inpainting and export steps are placeholders.
+> **Status: pre-alpha.** The pipeline core, the `extract` step and the `audio`
+> step work. The analysis, inpainting and export steps are placeholders.
 
 ## Requirements
 
@@ -43,6 +43,13 @@ layerlab run input.mp4 --out ./output
 - If a step fails, the error is recorded in the manifest, earlier outputs are kept, and the command exits non-zero.
 
 The `extract` step writes `audio.wav` (48 kHz stereo) and `video_only.mp4` (the video stream, copied without re-encoding), and records fps, resolution and duration.
+
+The `audio` step splits that audio into `dialogue.wav`, `music.wav` and `effects.wav`, and writes `sfx_events.json` with the time, duration, peak level and confidence of each sound-effect hit. It checks that the stems add back up to the original mix and records the residual in the manifest.
+
+- Default backend: [TIGER-DnR](https://huggingface.co/JusperLee/TIGER-DnR) as an int8 ONNX model on onnxruntime (7 MB, CPU friendly). On a laptop CPU it runs at roughly 3-4x the length of the audio.
+- `--audio-backend demucs`: Demucs htdemucs_ft. Install it with `pip install "layerlab[demucs]"` (this pulls in PyTorch). It produces dialogue (vocals) and music only. Effects stay mixed into music and are marked unavailable.
+
+Long audio is processed in overlapping, crossfaded chunks, so memory use does not grow with the length of the video.
 
 `--device` picks the compute device (`auto`, `cuda`, `rocm`, `mps` or `cpu`). By default layerlab uses the best one it finds, and records the choice in the manifest.
 

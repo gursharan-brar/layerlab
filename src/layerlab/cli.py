@@ -16,6 +16,7 @@ from rich.progress import (
 from rich.table import Table
 
 from layerlab import __version__
+from layerlab.backends.catalog import BACKEND_NAMES, DEFAULT_BACKEND
 from layerlab.devices import DEVICE_CHOICES
 from layerlab.doctor import run_checks
 from layerlab.errors import LayerlabError
@@ -23,6 +24,7 @@ from layerlab.models import cache_dir, ensure_model, is_cached, load_registry, m
 from layerlab.models.download import DownloadProgress
 from layerlab.pipeline import StepFailed, run_pipeline
 from layerlab.steps import STEP_NAMES
+from layerlab.steps.audio import OPTION as AUDIO_BACKEND_OPTION
 
 app = typer.Typer(
     name="layerlab",
@@ -41,6 +43,11 @@ app.add_typer(models_app, name="models")
 
 _SKIP_HELP = f"Skip a step. Repeat to skip several. Steps: {', '.join(STEP_NAMES)}."
 _DEVICE_HELP = f"Compute device: {', '.join(DEVICE_CHOICES)}. auto picks the best available."
+_AUDIO_BACKEND_HELP = (
+    f"Source separation backend: {', '.join(BACKEND_NAMES)}. "
+    # The backslash stops Rich reading [demucs] as markup in --help.
+    'demucs needs pip install "layerlab\\[demucs]" and has no effects stem.'
+)
 _LICENSE_NOTE = "Licenses are as stated by each model's publisher. Check them yourself before use."
 
 
@@ -100,6 +107,7 @@ def run(
         False, "--force", help="Re-run every step, ignoring cached outputs."
     ),
     device: str = typer.Option("auto", "--device", help=_DEVICE_HELP),
+    audio_backend: str = typer.Option(DEFAULT_BACKEND, "--audio-backend", help=_AUDIO_BACKEND_HELP),
 ) -> None:
     """Run the pipeline on INPUT. Re-running resumes, skipping steps whose inputs are unchanged."""
     unknown = sorted(set(skip) - set(STEP_NAMES))
@@ -113,11 +121,22 @@ def run(
             f"unknown device '{device}'. Choose from: {', '.join(DEVICE_CHOICES)}.",
             param_hint="--device",
         )
+    if audio_backend not in BACKEND_NAMES:
+        raise typer.BadParameter(
+            f"unknown audio backend '{audio_backend}'. Choose from: {', '.join(BACKEND_NAMES)}.",
+            param_hint="--audio-backend",
+        )
     # soft_wrap keeps long paths on one line so they stay copyable.
     console = Console(soft_wrap=True)
     try:
         report = run_pipeline(
-            input_path, out, skip=skip, force=force, device=device, console=console
+            input_path,
+            out,
+            skip=skip,
+            force=force,
+            device=device,
+            options={AUDIO_BACKEND_OPTION: audio_backend},
+            console=console,
         )
     except StepFailed as exc:
         console.print(f"[red]Error:[/red] {escape(str(exc))}")

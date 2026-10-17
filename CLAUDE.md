@@ -16,7 +16,7 @@ Everything runs locally. Do not add code that uploads media or calls a remote in
 
 ## Current state
 
-Pre-alpha. The pipeline core exists: `layerlab run`, the job folder, the manifest, resumable steps, and the `extract` step. The `audio`, `analyze`, `inpaint` and `export` steps are **placeholders**: they declare their inputs and record `"placeholder": true` but do no processing yet.
+Pre-alpha. The pipeline core exists: `layerlab run`, the job folder, the manifest, resumable steps, the `extract` step and the `audio` step. The `analyze`, `inpaint` and `export` steps are **placeholders**: they declare their inputs and record `"placeholder": true` but do no processing yet.
 
 ## Architecture
 
@@ -37,6 +37,7 @@ Steps never call each other directly. The pipeline runner decides the order by r
   manifest.json          # source of truth: source info, one record per step
   steps/
     extract/             # audio.wav (48 kHz stereo PCM), video_only.mp4 (stream copy)
+    audio/               # dialogue.wav, music.wav, effects.wav (32-bit float), sfx_events.json
     <step>/              # one folder per step, written only by that step
     <step>.tmp/          # exists only while that step runs
 ```
@@ -69,7 +70,20 @@ Keep steps free of CLI code so they can be tested directly.
 
 ### Model backends behind interfaces
 
-Model code is never called directly from a step. Each capability is defined by a small interface (for example a `Protocol` in `src/layerlab/backends/`), such as a speech transcriber or a source separator. Concrete backends implement the interface. Steps depend only on the interface, so a backend can be swapped without touching step logic.
+Model code is never called directly from a step. Each capability is defined by a small interface (a `Protocol` in `src/layerlab/backends/`). Concrete backends implement the interface. Steps depend only on the interface, so a backend can be swapped without touching step logic.
+
+Run options such as the backend choice reach steps as `job.options` (set by `run_pipeline(options=...)`). A step that reads an option must return it from `config(job)`, which goes into its input hash, so changing the option re-runs the step. Steps report what they are doing with `job.report_status(text)`, for example while a model downloads.
+
+### Audio step and separation backends
+
+`src/layerlab/steps/audio.py` separates `extract`'s `audio.wav` into stems through the `Separator` protocol (`src/layerlab/backends/separation.py`). Backends are listed in `src/layerlab/backends/catalog.py` and chosen with `--audio-backend`:
+
+- `tiger` (default, `backends/tiger_dnr.py`): TIGER-DnR as the int8-weight ONNX export `audiojs/tiger-dnr`, on onnxruntime. The graph takes one mono 12 s, 44.1 kHz segment as an STFT (n_fft 2048, hop 512, periodic Hann, centred, reflect-padded; `audio/dsp.py` matches `torch.stft`) and returns dialogue, music and effects spectrograms. One model run takes about 35 s per segment on a laptop CPU, so the model runs once per chunk on the mid channel and its stems become power-ratio masks applied to each channel's STFT. Stems stay stereo and sum to the mix up to resampling error.
+- `demucs` (`backends/htdemucs.py`, extra `layerlab[demucs]`): htdemucs_ft, four checkpoints verified by the model manager before `torch.load`. vocals map to `dialogue`; drums, bass and other to `music`; `effects` is reported unavailable. The torch/demucs imports are inside `load` so the module imports without the extra.
+
+`audio/chunking.py` streams the WAV through the separator in overlapping chunks (`chunk_seconds`, `overlap_seconds` per backend) with a sin²/cos² crossfade, writing stems as it goes, so memory does not grow with file length. It also accumulates the residual `mix - sum(stems)`. The step records it in `data.mix_check` (`residual_db` relative to the mix, `None` when exact or silent; `within_tolerance` against -20 dB). An out-of-tolerance residual is flagged, not a failure.
+
+`audio/sfx.py` runs librosa onset detection on `effects.wav` in blocks, refines each onset to the attack within one 512-sample hop, and writes `sfx_events.json`: `time`, `duration`, `peak_dbfs`, `confidence` (onset strength relative to the file's strongest). With no effects stem it writes `"available": false` and no events.
 
 When adding a backend:
 
@@ -112,16 +126,21 @@ src/layerlab/
   step.py         # StepResult, StepSpec: the runner/step contract
   pipeline.py     # run_pipeline: ordering, caching, skipping, failures, progress
   ffmpeg.py       # ffprobe/ffmpeg wrappers
-  steps/          # extract (real), audio, analyze, inpaint, export (placeholders)
+  steps/          # extract, audio (real); analyze, inpaint, export (placeholders)
+  audio/          # dsp (STFT, resampling), chunking (crossfaded streaming), sfx (onsets)
+  backends/       # separation protocol, catalog, tiger_dnr, htdemucs
   devices.py      # compute device detection and selection
   models/         # registry.toml, registry loader, resumable verified downloads, cache
 tests/
-  conftest.py     # synthetic_video / silent_video fixtures generated by ffmpeg
+  conftest.py         # synthetic_video / silent_video fixtures; fake backends for every test
+  synthetic_audio.py  # mixes with known stems, BandSplitSeparator, IdentitySeparator
 ```
 
 ## Tests and media
 
-Never commit binary media. Tests that need video use the `synthetic_video` fixture (colour bars, a 440 Hz sine tone, a drawtext overlay) or `silent_video`, both generated by ffmpeg into a temp folder. They skip when ffmpeg is not on PATH, except in CI, where `LAYERLAB_REQUIRE_FFMPEG=1` makes them fail instead. Runner behaviour is tested with fake steps in `tests/test_pipeline.py` and needs no ffmpeg. Downloads are tested against a local HTTP server in `tests/test_downloads.py`; tests never download real weights.
+Never commit binary media. Tests that need video use the `synthetic_video` fixture (colour bars, a 440 Hz sine tone, a drawtext overlay) or `silent_video`, both generated by ffmpeg into a temp folder. They skip when ffmpeg is not on PATH, except in CI, where `LAYERLAB_REQUIRE_FFMPEG=1` makes them fail instead. Runner behaviour is tested with fake steps in `tests/test_pipeline.py` and needs no ffmpeg. Downloads are tested against a local HTTP server in `tests/test_downloads.py`.
+
+Tests never download or run real weights by default. A session-scoped autouse fixture in `conftest.py` points `LAYERLAB_CACHE_DIR` at a temp folder and replaces the `tiger` and `demucs` backends with `BandSplitSeparator`. It is session-scoped because module-scoped fixtures also run the pipeline. Audio tests use `synthetic_audio.make_mix()`: dialogue, music and effects in separate frequency bands, with noise bursts at known times. The fake separator splits by band, so stems, residuals and SFX onsets can be checked against the known answer. Tests marked `@pytest.mark.real_models` restore the real backends and the user's cache, and run only with `LAYERLAB_REAL_MODEL_TESTS=1` (about a minute on CPU; Demucs also needs the extra).
 
 ## Conventions
 
@@ -145,6 +164,8 @@ layerlab doctor
 layerlab run input.mp4 --out ./output [--skip <step>] [--force] [--device auto|cuda|rocm|mps|cpu]
 layerlab models list
 layerlab models fetch <name>...
+layerlab run input.mp4 --audio-backend demucs        # needs pip install -e ".[demucs]"
+LAYERLAB_REAL_MODEL_TESTS=1 pytest -m real_models    # runs the real models
 pre-commit install
 ```
 

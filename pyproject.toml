@@ -28,13 +28,22 @@ classifiers = [
     "Topic :: Multimedia :: Sound/Audio",
 ]
 dependencies = [
+    "librosa>=0.10",
+    "numpy>=1.24",
+    "onnxruntime>=1.17",
     "platformdirs>=4.0",
     "rich>=13.7",
+    "scipy>=1.10",
+    "soundfile>=0.12",
     "tomli>=2.0; python_version < '3.11'",
     "typer>=0.12",
 ]
 
 [project.optional-dependencies]
+# Optional Demucs htdemucs_ft audio backend (pulls in PyTorch).
+demucs = [
+    "demucs>=4.0.1",
+]
 dev = [
     "mypy>=1.11",
     "pre-commit>=3.8",
@@ -83,6 +92,20 @@ mypy_path = "src"
 files = ["src/layerlab", "tests"]
 warn_unreachable = true
 
+[[tool.mypy.overrides]]
+# Third-party packages without type information.
+module = ["soundfile", "onnxruntime", "scipy.*", "librosa", "librosa.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Optional extra: treated as untyped whether or not it is installed, so CI and dev agree.
+module = ["demucs", "demucs.*", "torch", "torch.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+markers = [
+    "real_models: downloads and runs real model weights; needs LAYERLAB_REAL_MODEL_TESTS=1",
+]

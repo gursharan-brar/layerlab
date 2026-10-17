@@ -6,7 +6,7 @@
 #
 # Fields:
 #   name            unique id used by `layerlab models fetch <name>`
-#   task            the layer the model serves: dialogue, music, sfx, graphics, timeline, inpaint
+#   task            separation, dialogue, music, sfx, graphics, timeline or inpaint
 #   description     one line
 #   url             direct download URL, pinned to an immutable revision
 #   sha256          hex SHA-256 of the file
@@ -17,6 +17,66 @@
 #
 # Licenses are recorded as stated by the publisher. Check them yourself before use.
 # Prefer formats that do not execute code on load (ONNX, safetensors, GGML/GGUF).
+
+# Default audio backend. Int8-weight ONNX export of JusperLee/TIGER-DnR
+# (revision b7a59560bbca10febbcd46fb01600f868e587f57), Apache-2.0.
+[[models]]
+name = "tiger-dnr-int8"
+task = "separation"
+description = "TIGER-DnR dialogue/music/effects separation, int8 weights (ONNX)"
+url = "https://huggingface.co/audiojs/tiger-dnr/resolve/65072a210374cac07ea2ac30a85a4a0b7c71a652/tiger.int8.onnx"
+sha256 = "2189859ac7e89cf4d9d284c6f393e737aaa2b3233ed7ee424ad622012bce7bca"
+size = 7320735
+license = "Apache-2.0"
+commercial_use = true
+homepage = "https://huggingface.co/audiojs/tiger-dnr"
+
+# Optional demucs backend: htdemucs_ft, one fine-tuned model per source. PyTorch
+# pickles, loaded only after the SHA-256 check. The first 8 hex digits of each
+# hash match the checksum in Demucs's own file name.
+[[models]]
+name = "htdemucs-ft-drums"
+task = "separation"
+description = "Demucs htdemucs_ft, drums model (PyTorch checkpoint)"
+url = "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/f7e0c4bc-ba3fe64a.th"
+sha256 = "ba3fe64ae8ef66ac9a4857222ce48efbdc5eb3ad375cb79dd13debee5aaa4066"
+size = 84141271
+license = "MIT"
+commercial_use = true
+homepage = "https://github.com/facebookresearch/demucs"
+
+[[models]]
+name = "htdemucs-ft-bass"
+task = "separation"
+description = "Demucs htdemucs_ft, bass model (PyTorch checkpoint)"
+url = "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/d12395a8-e57c48e6.th"
+sha256 = "e57c48e6b0e38af4f7118d7bd08c49f0a0c0edf7d09143bdd902ea0d237303e6"
+size = 84141271
+license = "MIT"
+commercial_use = true
+homepage = "https://github.com/facebookresearch/demucs"
+
+[[models]]
+name = "htdemucs-ft-other"
+task = "separation"
+description = "Demucs htdemucs_ft, other model (PyTorch checkpoint)"
+url = "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/92cfc3b6-ef3bcb9c.th"
+sha256 = "ef3bcb9c8b40d14ae5d51b6db2587339cc12c6b77c0be151ce6d69002e087bf2"
+size = 84141271
+license = "MIT"
+commercial_use = true
+homepage = "https://github.com/facebookresearch/demucs"
+
+[[models]]
+name = "htdemucs-ft-vocals"
+task = "separation"
+description = "Demucs htdemucs_ft, vocals model (PyTorch checkpoint)"
+url = "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/04573f0d-f3cf25b2.th"
+sha256 = "f3cf25b222c4eed7cd49dd8b2c9597d50c18bd154090f7b919cfa5f93cf22c49"
+size = 84141271
+license = "MIT"
+commercial_use = true
+homepage = "https://github.com/facebookresearch/demucs"
 
 [[models]]
 name = "silero-vad"

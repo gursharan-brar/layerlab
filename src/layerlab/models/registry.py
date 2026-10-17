@@ -20,7 +20,7 @@ else:
     import tomli as tomllib
 
 REGISTRY_ENV = "LAYERLAB_MODEL_REGISTRY"
-TASKS = frozenset({"dialogue", "music", "sfx", "graphics", "timeline", "inpaint"})
+TASKS = frozenset({"separation", "dialogue", "music", "sfx", "graphics", "timeline", "inpaint"})
 
 _NAME = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")

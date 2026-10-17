@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import shutil
 import time
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -33,7 +33,7 @@ from rich.progress import (
 from layerlab.devices import select_device
 from layerlab.errors import LayerlabError
 from layerlab.hashing import sha256_text
-from layerlab.job import Job, ProgressCallback
+from layerlab.job import Job, ProgressCallback, StatusCallback
 from layerlab.manifest import DeviceRecord, StepRecord, utc_now
 from layerlab.step import StepSpec
 from layerlab.steps import STEPS
@@ -79,10 +79,16 @@ def run_pipeline(
     skip: Collection[str] = (),
     force: bool = False,
     device: str = "auto",
+    options: Mapping[str, str] | None = None,
     steps: Sequence[StepSpec] = STEPS,
     console: Console | None = None,
 ) -> RunReport:
-    """Run `steps` for `source`, creating or resuming its job folder under `out_root`."""
+    """Run `steps` for `source`, creating or resuming its job folder under `out_root`.
+
+    `options` are run settings read by steps through `job.options`, for example
+    `{"audio_backend": "demucs"}`. Steps that read an option include it in their
+    config, so changing it re-runs them.
+    """
     names = [spec.name for spec in steps]
     unknown = sorted(set(skip) - set(names))
     if unknown:
@@ -97,10 +103,13 @@ def run_pipeline(
         hash_task = progress.add_task("hash input", total=1.0, status="")
         job = Job.open(source, out_root, on_hash_progress=_updater(progress, hash_task))
         job.manifest.device = DeviceRecord(choice.name, choice.detail, choice.requested)
+        job.options = dict(options or {})
         progress.update(hash_task, completed=1.0, status="[green]done")
 
+        # Tasks start their clocks when their step begins, so elapsed time is per step.
         tasks = {
-            spec.name: progress.add_task(spec.name, total=1.0, status="pending") for spec in steps
+            spec.name: progress.add_task(spec.name, total=1.0, status="pending", start=False)
+            for spec in steps
         }
         for spec in steps:
             job.manifest.steps.setdefault(spec.name, StepRecord("pending", spec.version))
@@ -109,6 +118,7 @@ def run_pipeline(
         report = RunReport(job_root=job.root)
         for spec in steps:
             task = tasks[spec.name]
+            progress.start_task(task)
             progress.update(task, status="running")
             try:
                 outcome = _run_step(
@@ -117,10 +127,13 @@ def run_pipeline(
                     skip=spec.name in skip,
                     force=force,
                     on_progress=_updater(progress, task),
+                    on_status=_status_updater(progress, task),
                 )
             except BaseException:
                 progress.update(task, status="[red]failed")
+                progress.stop_task(task)
                 raise
+            progress.stop_task(task)
             label = _STATUS_LABELS[outcome]
             if outcome != "skipped":
                 progress.update(task, completed=1.0)
@@ -132,7 +145,13 @@ def run_pipeline(
 
 
 def _run_step(
-    job: Job, spec: StepSpec, *, skip: bool, force: bool, on_progress: ProgressCallback
+    job: Job,
+    spec: StepSpec,
+    *,
+    skip: bool,
+    force: bool,
+    on_progress: ProgressCallback,
+    on_status: StatusCallback | None = None,
 ) -> Outcome:
     previous = job.manifest.steps[spec.name]
     if skip:
@@ -161,7 +180,7 @@ def _run_step(
     )
     job.save()
 
-    job.begin_step(work, on_progress)
+    job.begin_step(work, on_progress, on_status)
     try:
         result = spec.run(job)
         outputs = _promote(job, spec.name, work, result.outputs)
@@ -190,6 +209,7 @@ def _input_hash(job: Job, spec: StepSpec) -> str:
     payload = {
         "step": spec.name,
         "version": spec.version,
+        "config": spec.config(job),
         "inputs": [job.file_hash(path) for path in spec.inputs(job)],
     }
     return sha256_text(json.dumps(payload, sort_keys=True))
@@ -260,5 +280,12 @@ def _progress_display(console: Console) -> Progress:
 def _updater(progress: Progress, task: TaskID) -> ProgressCallback:
     def update(fraction: float) -> None:
         progress.update(task, completed=fraction)
+
+    return update
+
+
+def _status_updater(progress: Progress, task: TaskID) -> StatusCallback:
+    def update(text: str) -> None:
+        progress.update(task, status=escape(text))
 
     return update
