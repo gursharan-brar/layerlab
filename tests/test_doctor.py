@@ -6,6 +6,7 @@ import subprocess
 import pytest
 
 from layerlab import doctor
+from layerlab.devices import Device
 from layerlab.doctor import check_ffmpeg, check_gpu, check_python
 
 
@@ -36,19 +37,17 @@ def test_ffmpeg_present_reports_version(monkeypatch: pytest.MonkeyPatch) -> None
     assert "ffmpeg version 7.0" in check.detail
 
 
-def test_gpu_nvidia_reported(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
-
-    def fake_run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(args, 0, stdout="NVIDIA RTX 4090, 24564 MiB\n")
-
-    monkeypatch.setattr(subprocess, "run", fake_run)
+def test_gpu_reports_best_device(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        doctor,
+        "detect_devices",
+        lambda: [Device("cuda", "NVIDIA RTX 4090, 24564 MiB"), Device("cpu", "x86_64")],
+    )
     check = check_gpu()
     assert check.status == "ok"
-    assert "RTX 4090" in check.detail
+    assert check.detail == "cuda: NVIDIA RTX 4090, 24564 MiB"
 
 
 def test_gpu_absent_is_a_warning(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(shutil, "which", lambda _name: None)
-    monkeypatch.setattr(doctor, "_is_apple_silicon", lambda: False)
+    monkeypatch.setattr(doctor, "detect_devices", lambda: [Device("cpu", "x86_64")])
     assert check_gpu().status == "warn"

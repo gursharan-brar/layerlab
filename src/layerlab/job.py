@@ -63,6 +63,11 @@ class Job:
         return job
 
     @property
+    def device(self) -> str:
+        """Compute device chosen for this run: cuda, rocm, mps or cpu."""
+        return self.manifest.device.name if self.manifest.device else "cpu"
+
+    @property
     def manifest_path(self) -> Path:
         return self.root / MANIFEST_NAME
 

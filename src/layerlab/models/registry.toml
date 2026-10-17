@@ -1,0 +1,74 @@
+# layerlab model registry.
+#
+# Each [[models]] entry is a single weight file that layerlab downloads on first
+# use into the user cache directory and verifies against `sha256`. Weights are
+# never stored in this repository or in the layerlab package.
+#
+# Fields:
+#   name            unique id used by `layerlab models fetch <name>`
+#   task            the layer the model serves: dialogue, music, sfx, graphics, timeline, inpaint
+#   description     one line
+#   url             direct download URL, pinned to an immutable revision
+#   sha256          hex SHA-256 of the file
+#   size            size in bytes
+#   license         SPDX identifier, or NOASSERTION when the publisher states none
+#   commercial_use  true only if the license clearly allows commercial use
+#   homepage        model card or source page where the license is stated
+#
+# Licenses are recorded as stated by the publisher. Check them yourself before use.
+# Prefer formats that do not execute code on load (ONNX, safetensors, GGML/GGUF).
+
+[[models]]
+name = "silero-vad"
+task = "dialogue"
+description = "Silero voice activity detection (ONNX)"
+url = "https://huggingface.co/onnx-community/silero-vad/resolve/e71cae966052b992a7eca6b17738916ce0eca4ec/onnx/model.onnx"
+sha256 = "a4a068cd6cf1ea8355b84327595838ca748ec29a25bc91fc82e6c299ccdc5808"
+size = 2243022
+license = "MIT"
+commercial_use = true
+homepage = "https://huggingface.co/onnx-community/silero-vad"
+
+[[models]]
+name = "whisper-small"
+task = "dialogue"
+description = "Whisper small speech recognition for whisper.cpp (GGML)"
+url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.bin"
+sha256 = "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b"
+size = 487601967
+license = "MIT"
+commercial_use = true
+homepage = "https://huggingface.co/ggerganov/whisper.cpp"
+
+[[models]]
+name = "kim-vocal-2"
+task = "music"
+description = "MDX-Net vocal/instrumental separation, Kim Vocal 2 (ONNX)"
+url = "https://huggingface.co/seanghay/uvr_models/resolve/6f4fc0cfb0717c9033ffed12471a53008f145b20/Kim_Vocal_2.onnx"
+sha256 = "ce74ef3b6a6024ce44211a07be9cf8bc6d87728cc852a68ab34eb8e58cde9c8b"
+size = 66759214
+license = "NOASSERTION"
+commercial_use = false
+homepage = "https://huggingface.co/seanghay/uvr_models"
+
+[[models]]
+name = "paddleocr-det-v3"
+task = "graphics"
+description = "PaddleOCR v3 text detection for on-screen text (ONNX)"
+url = "https://huggingface.co/monkt/paddleocr-onnx/resolve/7b02d0a30a07ba2b92ad1ff5a8941ae2c633de65/detection/v3/det.onnx"
+sha256 = "ee40e80071ba3a320d4efda75f3e22047a7d049e9bf7bcaaf9daea23fc21b935"
+size = 2429873
+license = "Apache-2.0"
+commercial_use = true
+homepage = "https://huggingface.co/monkt/paddleocr-onnx"
+
+[[models]]
+name = "lama"
+task = "inpaint"
+description = "LaMa large-mask inpainting, fp32 (ONNX)"
+url = "https://huggingface.co/Carve/LaMa-ONNX/resolve/c3c0c9e468934d62e79c329e35d82dd09ff8c444/lama_fp32.onnx"
+sha256 = "1faef5301d78db7dda502fe59966957ec4b79dd64e16f03ed96913c7a4eb68d6"
+size = 208044816
+license = "Apache-2.0"
+commercial_use = true
+homepage = "https://huggingface.co/Carve/LaMa-ONNX"

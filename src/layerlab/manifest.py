@@ -2,6 +2,11 @@
 
 `manifest.json` is the source of truth for a job. Steps never read each other's
 code; they find each other's outputs through the manifest.
+
+Schema history:
+  1: source, steps
+  2: adds `device`, the compute device of the most recent run. Version 1
+     manifests load with `device` unset and are written back as version 2.
 """
 
 from __future__ import annotations
@@ -16,7 +21,8 @@ from typing import Any, Literal
 from layerlab import __version__
 from layerlab.errors import LayerlabError
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+_READABLE_VERSIONS = frozenset({1, 2})
 MANIFEST_NAME = "manifest.json"
 
 StepStatus = Literal["pending", "running", "succeeded", "failed", "skipped"]
@@ -35,6 +41,15 @@ class SourceInfo:
     path: str
     sha256: str
     size_bytes: int
+
+
+@dataclass
+class DeviceRecord:
+    """The compute device a run used. `requested` is `auto` or the `--device` value."""
+
+    name: str
+    detail: str
+    requested: str
 
 
 @dataclass
@@ -62,6 +77,7 @@ class Manifest:
 
     source: SourceInfo
     steps: dict[str, StepRecord] = field(default_factory=dict)
+    device: DeviceRecord | None = None
     schema_version: int = SCHEMA_VERSION
     layerlab_version: str = __version__
     created_at: str = field(default_factory=utc_now)
@@ -73,7 +89,7 @@ class Manifest:
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> Manifest:
         version = raw.get("schema_version")
-        if version != SCHEMA_VERSION:
+        if version not in _READABLE_VERSIONS:
             raise LayerlabError(
                 f"manifest schema version {version!r} is not supported "
                 f"(this layerlab writes version {SCHEMA_VERSION})"
@@ -83,9 +99,11 @@ class Manifest:
             if record.get("status") not in _STATUSES:
                 raise ValueError(f"step {name!r} has unknown status {record.get('status')!r}")
             steps[name] = StepRecord(**record)
+        device = raw.get("device")
         return cls(
             source=SourceInfo(**raw["source"]),
             steps=steps,
+            device=DeviceRecord(**device) if device else None,
             schema_version=SCHEMA_VERSION,
             layerlab_version=str(raw.get("layerlab_version", "")),
             created_at=str(raw["created_at"]),

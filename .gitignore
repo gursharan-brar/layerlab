@@ -15,14 +15,22 @@ venv/
 .coverage
 htmlcov/
 
-# layerlab job outputs and local model weights
+# layerlab job outputs and model weights (weights are downloaded at runtime, never committed)
 jobs/
-models/
+output/
+/models/
 *.safetensors
 *.onnx
 *.gguf
+*.ggml
+*.bin
 *.pt
 *.pth
+*.ckpt
+*.th
+*.tflite
+*.h5
+*.part
 
 # Editors and OS
 .idea/

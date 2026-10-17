@@ -56,6 +56,18 @@ def test_job_folder_is_named_from_input_hash(source: Path, tmp_path: Path) -> No
     assert report.job_root == (tmp_path / "out").resolve() / sha256_file(source)[:JOB_ID_LENGTH]
 
 
+def test_chosen_device_is_recorded(source: Path, tmp_path: Path) -> None:
+    report = run_pipeline(source, tmp_path / "out", steps=STEPS, device="cpu", console=_quiet())
+    device = _manifest(report.job_root)["device"]
+    assert isinstance(device, dict)
+    assert (device["name"], device["requested"]) == ("cpu", "cpu")
+
+
+def test_unknown_device_is_rejected(source: Path, tmp_path: Path) -> None:
+    with pytest.raises(LayerlabError, match="unknown device"):
+        run_pipeline(source, tmp_path / "out", steps=STEPS, device="tpu", console=_quiet())
+
+
 def test_steps_run_in_order_and_record_outputs(source: Path, tmp_path: Path) -> None:
     report = run_pipeline(source, tmp_path / "out", steps=STEPS, console=_quiet())
     assert [step.name for step in report.steps] == ["first", "second"]

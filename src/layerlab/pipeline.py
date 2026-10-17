@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Literal
 
 from rich.console import Console
+from rich.markup import escape
 from rich.progress import (
     BarColumn,
     Progress,
@@ -29,10 +30,11 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
+from layerlab.devices import select_device
 from layerlab.errors import LayerlabError
 from layerlab.hashing import sha256_text
 from layerlab.job import Job, ProgressCallback
-from layerlab.manifest import StepRecord, utc_now
+from layerlab.manifest import DeviceRecord, StepRecord, utc_now
 from layerlab.step import StepSpec
 from layerlab.steps import STEPS
 
@@ -76,6 +78,7 @@ def run_pipeline(
     *,
     skip: Collection[str] = (),
     force: bool = False,
+    device: str = "auto",
     steps: Sequence[StepSpec] = STEPS,
     console: Console | None = None,
 ) -> RunReport:
@@ -86,10 +89,14 @@ def run_pipeline(
         raise LayerlabError(
             f"unknown step(s) to skip: {', '.join(unknown)}. Steps are: {', '.join(names)}."
         )
+    console = console or Console()
+    choice = select_device(device)
+    console.print(f"Device: {choice.name} ({escape(choice.detail)})", soft_wrap=True)
 
-    with _progress_display(console or Console()) as progress:
+    with _progress_display(console) as progress:
         hash_task = progress.add_task("hash input", total=1.0, status="")
         job = Job.open(source, out_root, on_hash_progress=_updater(progress, hash_task))
+        job.manifest.device = DeviceRecord(choice.name, choice.detail, choice.requested)
         progress.update(hash_task, completed=1.0, status="[green]done")
 
         tasks = {

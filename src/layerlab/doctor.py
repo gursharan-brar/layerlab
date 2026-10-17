@@ -1,15 +1,16 @@
 """Environment checks behind `layerlab doctor`.
 
-Checks are deliberately dependency-free: they inspect the interpreter, PATH and
-vendor tools (`nvidia-smi`) rather than importing heavy ML libraries.
+Checks inspect the interpreter, PATH and vendor tools. The GPU check uses
+`layerlab.devices`, which consults PyTorch only if it is installed.
 """
 
-import platform
 import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
 from typing import Literal
+
+from layerlab.devices import detect_devices
 
 MIN_PYTHON: tuple[int, int] = (3, 10)
 _PROBE_TIMEOUT_SECONDS = 10
@@ -59,40 +60,13 @@ def check_ffmpeg() -> Check:
 
 
 def check_gpu() -> Check:
-    """Report whether an NVIDIA or Apple Silicon GPU is available. Absence is a warning."""
-    if shutil.which("nvidia-smi") is not None:
-        names = _nvidia_gpus()
-        if names:
-            return Check("gpu", "ok", "; ".join(names))
-    if _is_apple_silicon():
-        return Check("gpu", "ok", "Apple Silicon GPU (Metal)")
-    return Check(
-        "gpu",
-        "warn",
-        "no GPU detected; model steps will run on CPU and be slow",
-    )
+    """Report the best GPU device (CUDA, ROCm or MPS). Having none is a warning."""
+    best = detect_devices()[0]
+    if best.name == "cpu":
+        return Check("gpu", "warn", "no GPU detected; model steps will run on CPU and be slow")
+    return Check("gpu", "ok", f"{best.name}: {best.detail}")
 
 
 def run_checks() -> list[Check]:
     """Run every doctor check in display order."""
     return [check_python(), check_ffmpeg(), check_gpu()]
-
-
-def _nvidia_gpus() -> list[str]:
-    try:
-        result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"],
-            capture_output=True,
-            text=True,
-            timeout=_PROBE_TIMEOUT_SECONDS,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return []
-    if result.returncode != 0:
-        return []
-    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
-
-
-def _is_apple_silicon() -> bool:
-    return sys.platform == "darwin" and platform.machine() == "arm64"

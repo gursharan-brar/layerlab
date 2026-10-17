@@ -44,6 +44,19 @@ layerlab run input.mp4 --out ./output
 
 The `extract` step writes `audio.wav` (48 kHz stereo) and `video_only.mp4` (the video stream, copied without re-encoding), and records fps, resolution and duration.
 
+`--device` picks the compute device (`auto`, `cuda`, `rocm`, `mps` or `cpu`). By default layerlab uses the best one it finds, and records the choice in the manifest.
+
+## Models
+
+Model weights are not included in layerlab. They download on first use into your user cache folder, are checked against a SHA-256, and resume if interrupted.
+
+```bash
+layerlab models list            # registry with license and commercial-use columns
+layerlab models fetch lama      # download ahead of time
+```
+
+Licenses are as stated by each model's publisher. Check them before commercial use. Set `LAYERLAB_CACHE_DIR` to move the cache.
+
 ## Development
 
 ```bash

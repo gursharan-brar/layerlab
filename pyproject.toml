@@ -28,7 +28,9 @@ classifiers = [
     "Topic :: Multimedia :: Sound/Audio",
 ]
 dependencies = [
+    "platformdirs>=4.0",
     "rich>=13.7",
+    "tomli>=2.0; python_version < '3.11'",
     "typer>=0.12",
 ]
 
@@ -38,10 +40,29 @@ dev = [
     "pre-commit>=3.8",
     "pytest>=8.0",
     "ruff>=0.8",
+    # Installed on every Python so mypy can check the Python 3.10 import branch.
+    "tomli>=2.0",
 ]
 
 [project.scripts]
 layerlab = "layerlab.cli:app"
+
+[tool.hatch.build]
+# Model weights are downloaded at runtime and must never ship in the sdist or wheel.
+exclude = [
+    "*.safetensors",
+    "*.onnx",
+    "*.gguf",
+    "*.ggml",
+    "*.bin",
+    "*.pt",
+    "*.pth",
+    "*.ckpt",
+    "*.th",
+    "*.tflite",
+    "*.h5",
+    "*.part",
+]
 
 [tool.ruff]
 line-length = 100
